@@ -2705,3 +2705,113 @@ FROM Usuario
 GO
 
 SELECT * FROM [Vista_Usuarios_SA]
+GO
+
+--TRIGGER PARA ACTUALIZAR FECHAMODIFICA CUANDO SE ACTUALIZA UNA FILA
+CREATE TRIGGER tr_Empleado
+ON Empleado FOR UPDATE
+AS
+DECLARE @idTemp int
+SELECT @idTemp = idEmpleado from inserted
+UPDATE Empleado SET fechaModifica = GETDATE() WHERE idEmpleado = @idTemp
+GO
+
+--TRIGGER PARA VERIFICAR QUE SE INTRODUZCA UN USUARIOCREA CUANDO SE CREE UN USUARIO NUEVO
+CREATE TRIGGER tr_UsuarioCreaVerificarUsuario
+ON Usuario FOR INSERT
+AS
+DECLARE @CantidadDeUsuarios int
+SELECT @CantidadDeUsuarios = COUNT(idUsuario) FROM Usuario
+IF(@CantidadDeUsuarios > 1)
+BEGIN
+	DECLARE @TempUsuario int
+	SELECT @TempUsuario = idUsuarioCrea from inserted
+	IF(@TempUsuario IS NULL or @TempUsuario = '')
+	BEGIN
+	RAISERROR (N'Es necesario introducir el usuario que esta creando el nuevo usuario',10, 1);
+	ROLLBACK TRANSACTIOn
+	END
+END
+GO
+
+--COMPROBAR QUE SOLO ESTE PRESENTE O EL ID DEL ALUMNO O EL ID DEL EMPLEADO
+CREATE TRIGGER tr_ServicioEnfermeriaComprobacion_A
+ON EnfermeriaServicio FOR INSERT
+AS
+DECLARE @idAlumnoTemp int
+DECLARE @idEmpleadoTemp int
+
+
+SELECT @idAlumnoTemp = idAlumno from inserted
+SELECT @idEmpleadoTemp = idEmpleado from inserted
+
+
+IF((@idAlumnoTemp IS NULL and @idEmpleadoTemp is NULL) OR (@idAlumnoTemp IS NOT NULL and @idEmpleadoTemp IS NOT NULL))
+BEGIN
+RAISERROR (N'El Servicio solo puede atender a un alumno o docente a la vez',10, 1);
+	 ROLLBACK TRANSACTIOn
+END
+GO
+
+--COMPROBAR QUE SE INTRODUZCA UN CORREO ELECTRONICO VALIDO
+CREATE TRIGGER tr_UsuarioCorreo
+ON Usuario FOR INSERT
+AS
+DECLARE @idUsuarioTemp int
+DECLARE @correoTemp varchar(50)
+
+SELECT @idUsuarioTemp = idUsuario from inserted
+SELECT @correoTemp = correo from inserted
+
+IF (
+     CHARINDEX(' ',LTRIM(RTRIM(@correoTemp))) = 0 
+AND  LEFT(LTRIM(@correoTemp),1) <> '@' 
+AND  RIGHT(RTRIM(@correoTemp),1) <> '.' 
+AND  CHARINDEX('.',@correoTemp ,CHARINDEX('@',@correoTemp)) - CHARINDEX('@',@correoTemp ) > 1 
+AND  LEN(LTRIM(RTRIM(@correoTemp ))) - LEN(REPLACE(LTRIM(RTRIM(@correoTemp)),'@','')) = 1 
+AND  CHARINDEX('.',REVERSE(LTRIM(RTRIM(@correoTemp)))) >= 3 
+AND  (CHARINDEX('.@',@correoTemp ) = 0 AND CHARINDEX('..',@correoTemp ) = 0)
+)
+BEGIN
+   print 'Correo valido'
+END
+ELSE
+BEGIN
+   print 'Correo invalido'
+	RAISERROR (N'Direccion de correo invalido',10, 1);
+	 ROLLBACK TRANSACTION
+END
+GO
+
+
+--BORRAR CUALQUIER TIPO DE SANGRE QUE SE INTENTE INSERTAR
+CREATE TRIGGER tr_TipoSangreInsertarDenegar
+ON TipoSangre FOR INSERT
+AS
+DECLARE @idTipoSangretemp int
+SELECT @idTipoSangretemp = idTipoSangre from inserted
+
+DELETE FROM TipoSangre where idTipoSangre = @idTipoSangretemp
+print 'No se pueden agregar mas tipos de sangre a la tabla "TipoSangre"'
+GO
+
+--VERIFICAR QUE EL NUMERO TELEFONICO DE UN EMPLEADO SEA VALIDO
+CREATE TRIGGER tr_EmpleadoVerificarNumero
+ON Empleado FOR INSERT
+AS
+DECLARE @idEmpleadoTemp int
+DECLARE @numeroTemp char(10)
+
+SELECT @idEmpleadoTemp = idEmpleado from inserted
+SELECT @numeroTemp = telefono from inserted
+
+if(@numeroTemp LIKE '866 %')
+BEGIN
+print 'Numero de telefono valido';
+END
+ELSE
+BEGIN
+	RAISERROR (N'Cantidad de comision no valida',10, 1);
+	ROLLBACK TRANSACTION
+END
+GO
